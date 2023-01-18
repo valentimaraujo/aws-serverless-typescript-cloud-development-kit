@@ -7,24 +7,31 @@ export async function handler(event: APIGatewayProxyEvent, context: Context): Pr
     console.log(`%cAPI Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`, 'color: black; background: gray;');
 
     if (resource === '/products') {
-        if (httpMethod === 'GET') {
-            console.log(`%c========>> ${httpMethod}`, 'color: black; background: gray;');
-            return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    message: 'GET Products - OK'
-                })
-            }
+        console.log(`%c========>> ${httpMethod}`, 'color: black; background: gray;');
+        return {
+            statusCode: 201,
+            body: JSON.stringify({
+                message: 'POST Product - OK'
+            })
         }
     } else if (resource === '/products/{id}') {
         const productId = pathParameters!.id as string;
         const resourceId = resource.replace('{id}', productId);
         console.log(`%c========>> ${httpMethod} ${resourceId}`, 'color: black; background: gray;');
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: `GET Product by ID - ${resourceId}`
-            })
+        if (httpMethod === 'PUT') {
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: `${httpMethod} Product - ${resourceId}`
+                })
+            }
+        } else if (httpMethod === 'DELETE') {
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: `${httpMethod} Product - ${resourceId}`
+                })
+            }
         }
     }
 

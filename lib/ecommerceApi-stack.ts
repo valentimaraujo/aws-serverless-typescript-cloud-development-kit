@@ -6,6 +6,7 @@ import { Construct } from 'constructs';
 
 interface ECommerceApiStackProps extends cdk.StackProps {
     productsFetchHandler: lambdaNodeJS.NodejsFunction
+    productsAdminHandler: lambdaNodeJS.NodejsFunction
 };
 
 export class EcommerceApiStack extends cdk.Stack {
@@ -15,6 +16,7 @@ export class EcommerceApiStack extends cdk.Stack {
         const logGroup = new cwLogs.LogGroup(this, 'ECommerceApiLogs');
         const api = new apiGateway.RestApi(this, 'ECommerceApi', {
             restApiName: 'ECommerceApi',
+            cloudWatchRole: true,
             deployOptions: {
                 accessLogDestination: new apiGateway.LogGroupLogDestination(logGroup),
                 accessLogFormat: apiGateway.AccessLogFormat.jsonWithStandardFields({
@@ -32,8 +34,18 @@ export class EcommerceApiStack extends cdk.Stack {
         });
 
         const productsFetchIntegration = new apiGateway.LambdaIntegration(props.productsFetchHandler);
+        const productsAdminIntegration = new apiGateway.LambdaIntegration(props.productsAdminHandler);
 
         const productsResource = api.root.addResource('products');
+        const productIdResource = productsResource.addResource('{id}');
+
+        // PRODUCTS ADMIN INTEGRATION
+        productsResource.addMethod('POST', productsAdminIntegration);
+        productIdResource.addMethod('PUT', productsFetchIntegration);
+        productIdResource.addMethod('DELETE', productsFetchIntegration);
+
+        // PRODUCTS FETCH INTEGRATION
         productsResource.addMethod('GET', productsFetchIntegration);
+        productIdResource.addMethod('GET', productsFetchIntegration);
     }
 }
