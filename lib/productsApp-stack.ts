@@ -38,6 +38,7 @@ export class ProductsAppStack extends Stack{
             }
         });
         this.productsDdb.grantReadData(this.productsFetchHandler);
+        this.productsFetchHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY)
 
         this.productsAdminHandler = new lambdaNodeJS.NodejsFunction(this, 'ProductsAdminFunction', {
             functionName: 'ProductsAdminFunction',
@@ -54,5 +55,6 @@ export class ProductsAppStack extends Stack{
             }
         });
         this.productsDdb.grantWriteData(this.productsAdminHandler);
+        this.productsAdminHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY)
     }
 }
