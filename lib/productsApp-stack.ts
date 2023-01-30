@@ -1,7 +1,9 @@
 import * as lambdaNodeJS from 'aws-cdk-lib/aws-lambda-nodejs';
-import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps, CfnResource } from 'aws-cdk-lib';
 import { Table, AttributeType, BillingMode } from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 export class ProductsAppStack extends Stack{
     readonly productsFetchHandler: lambdaNodeJS.NodejsFunction;
@@ -23,6 +25,11 @@ export class ProductsAppStack extends Stack{
             writeCapacity: 1
         });
 
+        // PRODUCTS LAYER
+        const productsLayerVersionArn = 'ProductsLayerVersionArn';
+        const productsLayerArn = ssm.StringParameter.valueForStringParameter(this, productsLayerVersionArn);
+        const productsLayer = lambda.LayerVersion.fromLayerVersionArn(this, productsLayerVersionArn, productsLayerArn)
+
         this.productsFetchHandler = new lambdaNodeJS.NodejsFunction(this, 'ProductsFetchFunction', {
             functionName: 'ProductsFetchFunction',
             entry: 'lambda/products/productsFetchFunction.ts',
@@ -35,10 +42,13 @@ export class ProductsAppStack extends Stack{
             },
             environment: {
                 PRODUCTS_DDB: this.productsDdb.tableName
-            }
+            },
+            layers: [productsLayer]
         });
         this.productsDdb.grantReadData(this.productsFetchHandler);
-        this.productsFetchHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY)
+        const resourceFetchHandler = this.productsFetchHandler.node.defaultChild as CfnResource;
+        resourceFetchHandler.applyRemovalPolicy(RemovalPolicy.DESTROY);
+        // this.productsFetchHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
         this.productsAdminHandler = new lambdaNodeJS.NodejsFunction(this, 'ProductsAdminFunction', {
             functionName: 'ProductsAdminFunction',
@@ -52,9 +62,12 @@ export class ProductsAppStack extends Stack{
             },
             environment: {
                 PRODUCTS_DDB: this.productsDdb.tableName
-            }
+            },
+            layers: [productsLayer]
         });
         this.productsDdb.grantWriteData(this.productsAdminHandler);
-        this.productsAdminHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY)
+        const resourceAdminHandler = this.productsAdminHandler.node.defaultChild as CfnResource;
+        resourceAdminHandler.applyRemovalPolicy(RemovalPolicy.DESTROY);
+        // this.productsFetchHandler.logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY);
     }
 }
