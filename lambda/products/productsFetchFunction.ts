@@ -1,37 +1,64 @@
-import {APIGatewayProxyEvent, APIGatewayProxyResult, Context} from "aws-lambda";
+import {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  Context,
+} from 'aws-lambda';
+import { DynamoDB } from 'aws-sdk';
 
-export async function handler(event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> {
-    const lambdaRequestId = context.awsRequestId;
-    const { resource, httpMethod, requestContext: { requestId: apiRequestId }, pathParameters } = event;
+import { ProductRepository } from '/opt/nodejs/productsLayer';
 
-    console.log(`%cAPI Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`, 'color: black; background: gray;');
+const productDdb = process.env.PRODUCTS_DDB!;
+const ddbClient = new DynamoDB.DocumentClient();
 
-    if (resource === '/products') {
-        if (httpMethod === 'GET') {
-            console.log(`%c========>> ${httpMethod}`, 'color: black; background: gray;');
-            return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    message: 'GET Products - OK'
-                })
-            }
-        }
-    } else if (resource === '/products/{id}') {
-        const productId = pathParameters!.id as string;
-        const resourceId = resource.replace('{id}', productId);
-        console.log(`%c========>> ${httpMethod} ${resourceId}`, 'color: black; background: gray;');
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: `GET Product by ID - ${resourceId}`
-            })
-        }
+const productRepository = new ProductRepository(ddbClient, productDdb);
+
+export async function handler(
+  event: APIGatewayProxyEvent,
+  context: Context,
+): Promise<APIGatewayProxyResult> {
+  const lambdaRequestId = context.awsRequestId;
+  const {
+    resource,
+    httpMethod,
+    requestContext: { requestId: apiRequestId },
+    pathParameters,
+  } = event;
+
+  console.log(
+    `%cAPI Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`,
+    'color: black; background: gray;',
+  );
+
+  if (resource === '/products') {
+    if (httpMethod === 'GET') {
+      const products = await productRepository.getAllProducts();
+      return {
+        statusCode: 200,
+        body: JSON.stringify(products),
+      };
     }
-
-    return {
-        statusCode: 400,
-        body: JSON.stringify({
-            message: 'BadRequest'
-        })
+  } else if (resource === '/products/{id}') {
+    const productId = pathParameters!.id as string;
+    try {
+      const products = await productRepository.getProductById(productId);
+      return {
+        statusCode: 200,
+        body: JSON.stringify(products),
+      };
+    } catch (err) {
+      const errorMessage = (<Error>err).message;
+      console.log(errorMessage);
+      return {
+        statusCode: 404,
+        body: errorMessage,
+      };
     }
+  }
+
+  return {
+    statusCode: 400,
+    body: JSON.stringify({
+      message: 'BadRequest',
+    }),
+  };
 }
