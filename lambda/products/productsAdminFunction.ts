@@ -3,17 +3,21 @@ import {
   APIGatewayProxyResult,
   Context,
 } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { DynamoDB, Lambda } from 'aws-sdk';
 import * as AWSXRay from 'aws-xray-sdk';
+import * as console from 'console';
 
+import { ProductEvent, ProductEventType } from '/opt/nodejs/productEventsLayer';
 import { Product, ProductRepository } from '/opt/nodejs/productsLayer';
 
 AWSXRay.captureAWS(require('aws-sdk'));
 
-const productDdb = process.env.PRODUCTS_DDB!;
+const productsDdb = process.env.PRODUCTS_DDB!;
+const productEventsFunctionName = process.env.PRODUCT_EVENTS_FUNCTION_NAME!;
 const ddbClient = new DynamoDB.DocumentClient();
+const lambdaClient = new Lambda();
 
-const productRepository = new ProductRepository(ddbClient, productDdb);
+const productRepository = new ProductRepository(ddbClient, productsDdb);
 
 export async function handler(
   event: APIGatewayProxyEvent,
@@ -37,6 +41,14 @@ export async function handler(
   if (resource === '/products') {
     const productCreated = await productRepository.createProduct(product);
 
+    const response = await sendProductEvent(
+      productCreated,
+      ProductEventType.CREATED,
+      'evodev@evodev.com.br',
+      lambdaRequestId,
+    );
+    console.log(response);
+
     return {
       statusCode: 201,
       body: JSON.stringify(productCreated),
@@ -50,6 +62,14 @@ export async function handler(
           productId,
           product,
         );
+
+        const response = await sendProductEvent(
+          productUpdated,
+          ProductEventType.UPDATED,
+          'evodev2@evodev.com.br',
+          lambdaRequestId,
+        );
+        console.log(response);
 
         return {
           statusCode: 200,
@@ -65,6 +85,14 @@ export async function handler(
     } else if (httpMethod === 'DELETE') {
       try {
         const products = await productRepository.deleteProduct(productId);
+
+        const response = await sendProductEvent(
+          products,
+          ProductEventType.DELETED,
+          'evodev3@evodev.com.br',
+          lambdaRequestId,
+        );
+        console.log(response);
         return {
           statusCode: 200,
           body: JSON.stringify(products),
@@ -86,4 +114,28 @@ export async function handler(
       message: 'BadRequest',
     }),
   };
+}
+
+function sendProductEvent(
+  product: Product,
+  eventType: ProductEventType,
+  email: string,
+  lambdaRequestId: string,
+) {
+  const event: ProductEvent = {
+    email: email,
+    eventType: eventType,
+    productCode: product.code,
+    productId: product.id,
+    productPrice: product.price,
+    requestId: lambdaRequestId,
+  };
+
+  return lambdaClient
+    .invoke({
+      FunctionName: productEventsFunctionName,
+      Payload: JSON.stringify(event),
+      InvocationType: 'RequestResponse',
+    })
+    .promise();
 }
